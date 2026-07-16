@@ -3,32 +3,82 @@ using UnityEngine.InputSystem; // 新しいInput Systemを使用
 
 public class PlayerController : MonoBehaviour
 {
-    // インスペクターから移動速度を調整できるようにする
+    [Header("移動・ジャンプの設定")]
     [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float jumpForce = 10f; // ジャンプする力
+
+    [Header("地面判定の設定")]
+    [SerializeField] private Transform groundCheck; // 足元のオブジェクト(GroundCheck)
+    [SerializeField] private Vector2 checkSize = new Vector2(0.5f, 0.1f); // 判定エリアのサイズ
+    [SerializeField] private LayerMask groundLayer; // 地面レイヤー(Ground)
+
+    private Rigidbody2D rb;
+    private bool isGrounded; // 地面にいるかどうかのフラグ
+    private float horizontalInput; // 左右の入力値
+
+    void Start()
+    {
+        // 物理演算コンポーネントを取得
+        rb = GetComponent<Rigidbody2D>();
+    }
 
     void Update()
     {
+        // 1. 毎フレーム、地面に接しているかをチェック
+        isGrounded = Physics2D.OverlapBox(groundCheck.position, checkSize, 0f, groundLayer);
+
+        // 2. キーボードの入力を取得
+        GetInput();
+
+        // 3. ジャンプの入力検知（地面にいる時だけジャンプできる）
+        if (isGrounded && Keyboard.current != null)
+        {
+            if (Keyboard.current.spaceKey.wasPressedThisFrame ||
+                Keyboard.current.wKey.wasPressedThisFrame ||
+                Keyboard.current.upArrowKey.wasPressedThisFrame)
+            {
+                Jump();
+            }
+        }
+    }
+
+    void FixedUpdate()
+    {
+        // 物理演算（移動）は FixedUpdate で行うと挙動が安定します
         Move();
+    }
+
+    private void GetInput()
+    {
+        horizontalInput = 0f;
+
+        if (Keyboard.current != null)
+        {
+            // 左右の入力だけを取得（A/D または 左右矢印キー）
+            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) horizontalInput = -1f;
+            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) horizontalInput = 1f;
+        }
     }
 
     private void Move()
     {
-        // 1. キーボードの入力を取得（矢印キーやWASD）
-        Vector2 inputVector = Vector2.zero;
+        // 左右はキー入力、上下（Y軸）は Rigidbody の落下速度（重力）をそのまま維持する
+        rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
+    }
 
-        if (Keyboard.current != null)
+    private void Jump()
+    {
+        // 上方向へ力を加える
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+    }
+
+    // エディタの画面に判定エリアを赤い箱で表示する（デバッグ用）
+    private void OnDrawGizmos()
+    {
+        if (groundCheck != null)
         {
-            // 押されているキーに応じて方向を決定
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) inputVector.y = 1f;
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) inputVector.y = -1f;
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) inputVector.x = -1f;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) inputVector.x = 1f;
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireCube(groundCheck.position, checkSize);
         }
-
-        // 斜め移動の時に移動速度が速くならないように正規化する
-        inputVector = inputVector.normalized;
-
-        // 2. 移動速度とフレームレート（Time.deltaTime）を考慮して実際に動かす
-        transform.position += new Vector3(inputVector.x, inputVector.y, 0f) * moveSpeed * Time.deltaTime;
     }
 }
